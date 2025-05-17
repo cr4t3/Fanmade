@@ -6,3 +6,4 @@ src/backups
 src/autobackups.py
 src/backups.py
 src/backups.config.json
+bugs.md
