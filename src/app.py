@@ -16,7 +16,8 @@ parser.add_argument("--debug", "-d", action="store_true")
 
 args = parser.parse_args()
 
-load_dotenv()
+if not os.environ["SECRET_KEY"]:
+    load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
