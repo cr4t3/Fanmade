@@ -1,0 +1,8 @@
+src/static/uploads/covers/*
+src/static/uploads/tracks/*
+src/instance
+# Currently the backups aren't developed on a prod-level so they are ignored
+src/backups
+src/autobackups.py
+src/backups.py
+src/backups.config.json
