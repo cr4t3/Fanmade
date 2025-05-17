@@ -1,0 +1,51 @@
+<div class="flex-none space-y-2">
+    <div class="relative inline-block group">
+        <a
+            {% if not track %}
+                href="/album/{{id}}"
+            {% else %}
+                href="#" data-track-id="{{id}}"
+            {% endif %} 
+            class="{%if track%} track-link {%endif%} inline-block relative group">
+            <img src="{{ cover_location }}" class="rounded-2xl object-cover w-340 h-340 shadow-inner hover:shadow-3xl">
+            
+            <!-- Div para oscurecer la imagen -->
+            <div class="absolute inset-0 bg-fanmadelightdark-950 opacity-0 group-hover:opacity-70 transition-opacity duration-300"></div>
+            
+            {% if track %}
+                <!-- Div para el SVG que se muestra solo al hacer hover -->
+                <div class="absolute inset-0 flex justify-center items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <svgload name="playArrow" class="w-12 h-12 fill-white" />
+                </div>
+            {% endif %}
+        </a>
+        
+        {% if track %}
+            <!-- Article icon link -->
+            <button onclick="openCredits({{id}})" class="absolute top-3 right-3 z-10">
+                <svgload name="article" class="fill-white w-6 h-6"></svgload>
+            </button>
+        {% endif %}
+    </div>
+
+    <span class="block text-start">
+        <div class="text-fanmadelightdark-50 font-bold text-xl">{{name}} {% if current_user.is_admin %}{% if not enabled %}<i class="text-red-500">(Disabled)</i>{% else %}<i class="text-green-500">(Enabled)</i>{% endif %}{% endif %}</div>
+        <div class="text-fanmadelightdark-500 font-medium text-base flex items-center justify-start">
+            {% if explicit %}
+                <svgload name="explicit" class="fill-fanmadelightdark-500 w-18 h-18"></svgload>
+            {% endif %}
+            <span>
+                {% if not track %}
+                    {% if tracks|length > 1 %} 
+                        Album 
+                    {% else %} 
+                        Single 
+                    {% endif %} 
+                {% else %}
+                    Song
+                {% endif %}
+                - 
+                <a href="/artist/@{{username}}">{{artist}}</a></span>
+        </div>
+    </span>
+</div>

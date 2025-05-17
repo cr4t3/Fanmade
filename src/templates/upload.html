@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-fanmadelightdark-800 text-fanmadelightdark-50 p-6 rounded-lg shadow-md space-y-2">
+    <div class="max-w-md mx-auto bg-yellow-600 text-fanmadelightdark-50 p-6 rounded-xl">
+        <h1 class="text-3xl font-bold mb-6">We are remaking this page.</h1>
+        <p class="text-lg">We are changing the way you upload music, as this current page has a lot of flaws.<br/>
+            We are trying to make things better for, you, the artists. Thank you!<br/>
+            <i><a href="/artist/@crate">- Crate, Fanmade CEO and Developer</a></i>
+        </p>
+    </div>
+    <h1 class="text-3xl font-bold mb-6">Upload album</h1>
+    <form method="POST" enctype="multipart/form-data" class="space-y-4">
+        <div class="space-y-4">
+            <!-- Album Information -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Album Title<span class="text-red-800">*</span></label>
+                <input type="text" name="album_title" id="album_title" required
+                    class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200"
+                    onchange="updateTrackTitles()">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Release Date<span class="text-red-800">*</span></label>
+                <input type="date" name="release_date" required
+                    class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Record Label</label>
+                <input type="text" name="record_label"
+                    class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Language<span class="text-red-800">*</span></label>
+                <select name="language" required
+                        class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+                    <option disabled selected></option>
+                    <option value="english">English</option>
+                    <option value="spanish">Spanish</option>
+                    <!-- Add more languages as needed -->
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Primary Genre<span class="text-red-800">*</span></label>
+                <select name="primary_genre" required
+                        class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+                    <option disabled selected></option>
+                    <option value="pop">Pop</option>
+                    <option value="rock">Rock</option>
+                    <option value="hip-hop">Hip-Hop</option>
+                    <!-- Add more genres as needed -->
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Secondary Genre</label>
+                <select name="secondary_genre"
+                        class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200"
+                        >
+                    <option selected value=""></option>
+                    <option value="pop">Pop</option>
+                    <option value="rock">Rock</option>
+                    <option value="hip-hop">Hip-Hop</option>
+                    <!-- Add more genres as needed -->
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Cover Image (3000x3000 recommended)<span class="text-red-800">*</span></label>
+                <input type="file" name="cover_image" accept="image/*" required
+                    class="mt-1 block w-full bg-fanmadelightdark-800 border-fanmadelightdark-400">
+            </div>
+
+            <!-- Track Information -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Number of Tracks<span class="text-red-800">*</span></label>
+                <input type="number" name="track_count" min="1" max="30" required
+                    class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200"
+                    onchange="generateTrackFields(this.value, document.getElementsByName('album_title')[0].value)">
+            </div>
+
+            <div id="track-fields" class="space-y-6">
+                <!-- Track fields will be generated here -->
+            </div>
+
+            {% with text="Upload Album", svg="album"%}
+                {% include "parts/button.html" %}
+            {% endwith %}
+            <p><span class="text-red-800">*</span> <span class="text-xs">(Required)</span></p>
+        </div>
+    </form>
+</div>
+
+<script>
+    function generateTrackFields(count, albumName) {
+        const container = document.getElementById('track-fields');
+        container.innerHTML = '';
+
+        for (let i = 0; i < parseInt(count); i++) {
+            // Si solo hay un track, establecer el título como el nombre del álbum y desactivar el campo
+            const isSingleTrack = count == 1;
+            const disabledAttr = isSingleTrack ? 'readonly' : '';
+
+            container.innerHTML += `<div class="border-t pt-4">
+    <h3 class="text-lg font-medium">Track ${i + 1}</h3>
+    
+    <div class="mt-4 space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-300">Track Title<span class="text-red-800">*</span></label>
+            <input type="text" name="track_title_${i}" minlength="1" required
+                value="${isSingleTrack ? albumName : ''}"
+                class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200"
+                ${disabledAttr}>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-300">Track File<span class="text-red-800">*</span></label>
+            <input type="file" name="track_file_${i}" accept="audio/*" required
+                class="mt-1 block w-full">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-300">Version Type<span class="text-red-800">*</span></label>
+            <select name="version_type_${i}" required
+                    class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+                <option disabled selected></option>
+                <option value="normal">Normal</option>
+                <option value="radio">Radio Edit</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block font-semibold text-gray-400">Credits<span class="text-red-800">*</span></label>
+            
+            <!-- Written By -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Written By<span class="text-red-800">*</span></label>
+                <div id="written_by_list_${i}">
+                    <div class="flex items-center space-x-4">
+                        <input type="text" name="written_by_${i}[]" required
+                            class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+                        <button type="button" class="text-red-600 hover:text-red-800" 
+                                onclick="removeCredit(this)">Remove</button>
+                    </div>
+                </div>
+                <button type="button" class="text-blue-400 hover:text-blue-200 mt-2" 
+                        onclick="addCredit(${i}, 'written_by')">
+                    + Add Another Writer
+                </button>
+            </div>
+        
+            <!-- Produced By -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Produced By<span class="text-red-800">*</span></label>
+                <div id="produced_by_list_${i}">
+                    </div>
+                </div>
+                <button type="button" class="text-blue-400 hover:text-blue-200 mt-2" 
+                        onclick="addCredit(${i}, 'produced_by')">
+                    + Add Another Producer
+                </button>
+            </div>
+        
+            <!-- Metadata Provided By (Optional) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300">Music Metadata Provided By (Optional)</label>
+                <div id="metadata_by_list_${i}">
+                    <div class="flex items-center space-x-4">
+                        <input type="text" name="metadata_by_${i}[]" value="{{current_user.artistName}}" readonly
+                            class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+                        <button type="button" class="text-red-600 hover:text-red-800" 
+                                onclick="removeCredit(this)">Remove</button>
+                    </div>
+                </div>
+                <button type="button" class="text-blue-400 hover:text-blue-200 mt-2" 
+                        onclick="addCredit(${i}, 'metadata_by')">
+                    + Add Another Metadata Provider
+                </button>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-300">
+                <input type="checkbox" name="is_explicit_${i}">
+                Contains explicit lyrics
+            </label>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-300">
+                <input type="checkbox" name="has_featuring_${i}"
+                    onchange="toggleFeaturingArtists(${i})">
+                Has featuring artists
+            </label>
+        </div>
+
+        <div id="featuring_artists_${i}" class="hidden space-y-4">
+            <div id="featuring_list_${i}">
+                <label class="block text-sm font-medium text-gray-300">Featured Artist<span class="text-red-800">*</span></label>
+                <div class="featuring-artist-entry mb-4">
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-grow">
+                            <div class="flex space-x-2">
+                                <input type="text" 
+                                    name="featuring_${i}[]" 
+                                    class="new-artist flex-growmt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200"
+                                    placeholder="New artist name">
+                            </div>
+                        </div>
+                        <button type="button" 
+                                class="text-red-600 hover:text-red-800"
+                                onclick="removeFeaturingArtist(this)">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <button type="button" 
+                    class="text-blue-400 hover:text-blue-200"
+                    onclick="addFeaturingArtist(${i})">
+                + Add Another Featured Artist
+            </button>
+        </div>
+    </div>
+</div>
+            `;
+        }
+    }
+
+    
+    function toggleFeaturingArtists(trackIndex) {
+        const featuringDiv = document.getElementById(`featuring_artists_${trackIndex}`);
+        featuringDiv.classList.toggle('hidden');
+    }
+    
+    
+    function addFeaturingArtist(trackIndex) {
+        const container = document.getElementById(`featuring_list_${trackIndex}`);
+        const newEntry = container.querySelector('.featuring-artist-entry').cloneNode(true);
+        
+        // Reset the values
+        const select = newEntry.querySelector('select.featuring-type');
+        const newInput = newEntry.querySelector('.new-artist');
+        newInput.classList.remove('hidden');
+        newInput.value = '';
+        
+        container.appendChild(newEntry);
+    }
+    
+    function removeFeaturingArtist(button) {
+        const container = button.closest('#featuring_list_' + button.closest('[id^="featuring_artists_"]').id.split('_').pop());
+        if (container.querySelectorAll('.featuring-artist-entry').length > 1) {
+            button.closest('.featuring-artist-entry').remove();
+        }
+    }
+
+    function updateTrackTitles() {
+        const albumTitle = document.getElementById('album_title').value;
+        const trackFields = document.querySelectorAll('[name^="track_title_"]');
+
+        trackFields.forEach((field, index) => {
+            const isSingleTrack = trackFields.length === 1;
+            if (isSingleTrack) {
+                field.value = albumTitle;
+            }
+        });
+    }
+
+    function addCredit(index, category) {
+        const container = document.getElementById(`${category}_list_${index}`);
+        const newField = document.createElement('div');
+        newField.classList.add('flex', 'items-center', 'space-x-4');
+        newField.innerHTML = `
+            <input type="text" name="${category}_${index}[]" required
+                class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+            <button type="button" class="text-red-600 hover:text-red-800" 
+                    onclick="removeCredit(this)">Remove</button>
+        `;
+        container.appendChild(newField);
+    }
+
+    function removeCredit(button, category, index) {
+        const container = document.getElementById(`${category}_list_${index}`);
+        const inputs = container.querySelectorAll('input');
+        
+        // Check if there's more than one input remaining
+        if (inputs.length > 1) {
+            button.parentElement.remove();
+        } else {
+            alert("At least one input is required for this category.");
+        }
+    }
+
+    if(document.getElementsByName("track_count").value != undefined){
+        generateTrackFields(document.getElementsByName("track_count")[0].value, document.getElementsByName("album_title")[0].value == undefined ? "" : document.getElementsByName("album_title").value)
+    }
+    </script>
+{% endblock %}

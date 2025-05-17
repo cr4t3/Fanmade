@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+
+<div class="flex-col items-center grid space-y-6">
+  <!--<button class="px-4 py-2 bg-black text-white rounded-full" onclick="scrollDiv(-1)">&#10094;</button>-->
+  
+  <div>
+    <h1 class="text-3xl font-bold mb-6">Latest Releases</h1>
+    <div class="grid grid-cols-4 space-x-4">
+      {% for album, artist, enabled in latest_releases%}
+          {% with id=album.id, cover_location=url_for('static', filename=album.cover_image), name=album.title, enabled=enabled, artist=artist.artistName, explicit=album.explicit, tracks=album.tracks, username=artist.username %}
+              {% include "parts/square_album.html" %}
+          {% endwith %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div>
+    <h1 class="text-3xl font-bold mb-6">Most Played</h1>
+    <div class="grid grid-cols-4 space-x-4">
+      {% for track, artist, enabled in most_played %}
+        {% with id=track.id, cover_location=url_for('static', filename=track.album.cover_image), name=track.title, enabled=enabled, artist=artist.artistName, explicit=track.explicit, track=true, username=artist.username %}
+          {% include "parts/square_album.html" %}
+        {% endwith %}
+      {% endfor %}
+    </div>
+  </div>
+  <!--<button class="px-4 py-2 bg-black text-white rounded-full" onclick="scrollDiv(1)">&#10095;</button>-->
+</div>
+
+{% endblock %}

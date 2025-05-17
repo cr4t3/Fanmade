@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="space-y-5">
+    <div class="bg-fanmadelightdark-800 text-fanmadelightdark-50 p-6 rounded-lg shadow-md space-y-3">
+        <label class="block text-lg font-medium text-fanmadeligthdark-50">Number of Songs</label>
+        <hr class="border-t border-gray-500">
+        <select class="bg-fanmadelightdark-800 border pr-16 border-fanmadelightdark-400 text-fanmadelightdark-50 rounded-lg px-2 py-2" name="number_of_songs" id="number_of_songs">
+            <option selected value="1">1 song (a single)</option>
+            {% for i in range(2,36)%}
+            <option value="{{i}}">{{i}} songs</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="bg-fanmadelightdark-800 text-fanmadelightdark-50 p-6 rounded-lg shadow-md space-y-3">
+        <label class="block text-lg font-medium text-fanmadelightdark-50">Has this single been published with anteority?</label>
+        <hr class="border-t border-gray-500">
+        <div class="space-y-1">
+            <label class="flex items-center space-x-2 px-4 py-2 rounded-lg cursor-pointer transition-colors bg-fanmadelightdark-800 hover:bg-fanmadelightdark-700">
+                <input type="radio" name="published" value="no" class="form-radio text-fanmadelightdark-50" checked>
+                <span>No</span>
+            </label>
+            <label class="flex items-center space-x-2 px-4 py-2 rounded-lg cursor-pointer transition-colors bg-fanmadelightdark-800 hover:bg-fanmadelightdark-700">
+                <input type="radio" name="published" value="yes" o="console.log('Sexo')" class="form-radio text-fanmadelightdark-50">
+                <span>Yes</span> 
+            </label>
+        </div>
+    </div>    
+    <div class="bg-fanmadelightdark-800 text-fanmadelightdark-50 p-6 rounded-lg shadow-md space-y-3">
+        <label class="block text-lg font-medium text-fanmadelightdark-50">Release Date</label>
+        <hr class="border-t border-gray-500">
+        <input type="date" name="release_date" min="{{today}}" class="bg-fanmadelightdark-800 border border-fanmadelightdark-400 text-fanmadelightdark-50 rounded-lg px-2 py-2" required>
+    </div>
+    <div class="bg-fanmadelightdark-800 text-fanmadelightdark-50 p-6 rounded-lg shadow-md space-y-3">
+        <label class="block text-lg font-medium text-fanmadelightdark-50">Record label</label>
+        <hr class="border-t border-gray-500">
+        <input type="text" name="record_label" class="bg-fanmadelightdark-800 border border-fanmadelightdark-400 text-fanmadelightdark-50 rounded-lg px-2 py-2" required>
+    </div>
+</div>
+
+{% endblock %}

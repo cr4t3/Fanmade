@@ -1,0 +1,51 @@
+<div class="bg-gradient-to-b from-fanmadelightdark-800 to-fanmadelightdark-900 text-fanmadelightdark-50 rounded-lg shadow-md overflow-hidden">
+    <img src="{{ url_for('static', filename=data.cover_image) }}" 
+         alt="{{ data.title }}" class="w-full h-64 object-cover blur-xl">
+    <div class="p-4">
+        <h2 class="text-xl font-bold">{{ data.title }}</h2>
+        <a href="/artist/@{{user.username}}" class="text-gray-400">{{ user.artistName }}</a>
+        <p class="text-sm text-gray-400">Released: {{ data.release_date.strftime('%B %d, %Y') }}</p>
+        {% if current_user.is_admin %}
+        <form method="POST">
+            <button class="bg-transparent text-red-500 font-semibold hover:text-white py-2 px-4 border border-red-500 hover:bg-red-500 space-x-2">{% if data.enabled %}Disable{% else %}Enable{% endif %} album</button>
+        </form>
+        {% endif %}
+        <div class="mt-4 space-y-2">
+            {% for track in data.tracks %}
+            <div class="flex justify-center items-center hover:bg-fanmadelightdark-800 rounded-3xl space-x-2" onmouseover="onTrackHover({{loop.index}})" onmouseout="onTrackUnhover({{loop.index}})">
+                <div class="inline-block relative group">
+                    <span class="text-gray-500" id="number_{{loop.index}}">{{ loop.index }}.</span>
+                    <a href="#" id="svg_{{loop.index}}" data-track-id="{{track.id}}" class="track-link hidden text-blue-500 hover:text-blue-700 icon-link">
+                        <svgload name="playArrow" class="w-24 h-24 fill-white"></svgload>
+                    </a>
+                </div>                      
+                <div class="flex justify-between items-center space-x-2">
+                    <span>{{ track.title }}</span>
+                    {% if track.featuring %}
+                        <span class="text-gray-400 text-sm">
+                            feat. 
+                            {% for feat in track.featuring %}
+                            <a href="/artist/@{{feat.username}}">{{ feat.artistName }}</a>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </span>
+                    {% endif %}
+                    {% if track.explicit %}
+                        <svgload name="explicit" class="fill-white w-18 w-18"></svgload>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<script>
+    function onTrackHover(id) {
+        document.getElementById("number_" + id).classList.add("hidden");
+        document.getElementById("svg_" + id).classList.remove("hidden");
+    }
+
+    function onTrackUnhover(id) {
+        document.getElementById("number_" + id).classList.remove("hidden");
+        document.getElementById("svg_" + id).classList.add("hidden");
+    }
+</script>

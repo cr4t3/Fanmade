@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="max-w-md mx-auto bg-fanmadelightdark-800 text-fanmadelightdark-50 p-6 rounded-lg shadow-md space-y-2">
+    <h1 class="text-3xl font-bold mb-6">Login</h1>
+    <form method="POST" class="space-y-4">
+        <div>
+            <label class="block font-medium">Username</label>
+            <input type="text" name="username" minlength="3" maxlength="256" required
+            class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+        </div>
+        <div>
+            <label class="block font-medium">Password</label>
+            <input type="password" name="password" minlength="6" required
+            class="mt-1 block w-full rounded-xl bg-fanmadelightdark-800 border-fanmadelightdark-400 shadow-line shadow-fanmadelightdark-200">
+        </div>
+
+        {% with text="Login", svg="login"%}
+            {% include "parts/button.html" %}
+        {% endwith %}
+    </form>
+</div>
+
+{% endblock %}

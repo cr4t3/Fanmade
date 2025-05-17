@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="bg-gradient-to-b from-fanmadelightdark-800 to-fanmadelightdark-900 text-fanmadelightdark-50 rounded-lg shadow-md overflow-hidden">
+    {% if latest_releases %}
+    <img src="{{ url_for('static', filename=latest_releases[0].cover_image) }}" 
+         alt="{{user_data.artistName}}" class="w-full h-64 object-cover blur-xl">
+    {% endif %}
+    <div class="p-4">
+        <h2 class="text-xl font-bold">{{user_data.artistName}}</h2>
+        <p class="text-gray-400">@{{user_data.username}}</p>
+        <div class="flex justify-around text-lg font-semibold">
+            <div>Followers <strong>{{user_data.followers|length}}</strong></div>
+            <div>Follows <strong>{{user_data.following|length}}</strong></div>
+        </div>
+        <form method="post" action="/{%if follows%}unfollow{%else%}follow{%endif%}/{{user_data.id}}">
+            <button 
+                class 
+                 =
+                "{%if follows%}bg-red-500 hover:bg-red-600{%else%}bg-fanmadeviolet-500 hover:bg-fanmadeviolet-600{%endif%} font-bold py-2 px-4 rounded-full flex items-center justify-center"><svgload name="{%if follows%}personRemove{%else%}personAdd{%endif%}" class="fill-white"></svgload>{%if follows%}Unfollow user{%else%}Follow user{%endif%}</button>
+        </form>
+        <div class="mt-4 space-y-2">
+            {% if most_played %}
+            <h1 class="text-xl font-bold mb-6">Most played</h1>
+            <div class="grid grid-cols-1 space-x-4">
+                {% with id=most_played.album.id, cover_location=url_for('static', filename=most_played.album.cover_image), name=most_played.title, artist=user_data.artistName, explicit=most_played.explicit, track=true%}
+                    {% include "parts/square_album.html"%}
+                {% endwith %}
+            </div>
+            {% endif %}
+            {% if latest_releases %}
+                <h1 class="text-xl font-bold mb-6">Latest releases</h1>
+                <div class="grid grid-cols-4 space-x-4">
+                    {% for release in latest_releases %}
+                        {% with id=release.id, cover_location=url_for('static', filename=release.cover_image), name=release.title, artist=user_data.artistName, explicit=release.explicit, tracks=release.tracks %}
+                            {% include "parts/square_album.html" %}
+                        {% endwith %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <div class="mt-4 space-y-2">
+            {% if featurings %}
+                <h1 class="text-xl font-bold mb-6">Featured in</h1>
+                <div class="grid grid-cols-4 space-x-4">
+                    {% for release in featurings %}
+                        {% with id=release.id, cover_location=url_for('static', filename=release.cover_image), name=release.title, artist=release.user.artistName, username=release.user.username, explicit=release.explicit, tracks=release.tracks %}
+                            {% include "parts/square_album.html" %}
+                        {% endwith %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<script>
+</script>
+{% endblock %}

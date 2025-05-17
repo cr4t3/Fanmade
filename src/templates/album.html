@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{% with data=album_data, user=user_data %}
+    {% include "parts/tracklist.html" %}
+{% endwith %}
+
+{% endblock %}
