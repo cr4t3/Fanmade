@@ -1,3 +1,0 @@
-The database goes in this folder. 
-This is only a file used to make GitHub create this folder.
-Do not delete on the repo.

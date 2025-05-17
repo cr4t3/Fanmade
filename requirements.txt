@@ -3,4 +3,5 @@ flask_login
 gunicorn
 python-dotenv
 pymongo[srv]
-mongoengine
+flask-mongoengine
+dnspython
