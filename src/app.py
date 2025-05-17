@@ -1,9 +1,11 @@
 from flask import *
-from flask_sqlalchemy import SQLAlchemy
+from mongoengine import (
+    Document, StringField, BooleanField, DateTimeField,
+    ReferenceField, ListField, IntField, CASCADE
+)
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user, AnonymousUserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from sqlalchemy import CheckConstraint
 import os
 from datetime import datetime
 import time
@@ -16,7 +18,7 @@ from dotenv import load_dotenv
 
 #args = parser.parse_args()
 
-if not os.environ["SECRET_KEY"]:
+if not os.environ["SECRET_KEY"] or os.environ["USE_DOTENV"]:
     load_dotenv()
 
 app = Flask(__name__)
@@ -24,23 +26,24 @@ app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///main.db"
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 ** 2
-db = SQLAlchemy(app)
+
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 #region Models
 
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    artistName = db.Column(db.String(80), unique=True, nullable=False)
-    username = db.Column(db.String(32), unique=True, nullable=False)
-    email = db.Column(db.String(256), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
-    enabled = db.Column(db.Boolean(), default=True, nullable=False)
-    is_admin = db.Column(db.Boolean(), default=False, nullable=False)
-    albums = db.relationship('Album', back_populates='user', lazy=True)  # Usando back_populates
-    followers = db.relationship('Follows', foreign_keys='Follows.followed_id', backref='followed', lazy=True)
-    following = db.relationship('Follows', foreign_keys='Follows.follower_id', backref='follower', lazy=True)
+# Modelo User
+class User(UserMixin, Document):
+    artistName = StringField(max_length=80, unique=True, required=True)
+    username = StringField(max_length=32, unique=True, required=True)
+    email = StringField(max_length=256, unique=True, required=True)
+    password_hash = StringField(max_length=128)
+    enabled = BooleanField(default=True, required=True)
+    is_admin = BooleanField(default=False, required=True)
+
+    albums = ListField(ReferenceField('Album', reverse_delete_rule=CASCADE))
+    followers = ListField(ReferenceField('Follows', reverse_delete_rule=CASCADE))
+    following = ListField(ReferenceField('Follows', reverse_delete_rule=CASCADE))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -48,62 +51,74 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-class Album(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    release_date = db.Column(db.DateTime, nullable=False)
-    record_label = db.Column(db.String(100))
-    language = db.Column(db.String(50), nullable=False)
-    primary_genre = db.Column(db.String(50), nullable=False)
-    secondary_genre = db.Column(db.String(50))
-    cover_image = db.Column(db.String(200), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    explicit = db.Column(db.Boolean(), nullable=False)
-    enabled = db.Column(db.Boolean(), default=True, nullable=False)
-    tracks = db.relationship('Track', backref='album', lazy=True)
-    user = db.relationship('User', back_populates='albums')  # Relación inversa con back_populates
+    def get_id(self):
+        # Flask-Login espera un string como ID
+        return str(self.id)
 
 
-class Track(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    album_id = db.Column(db.Integer, db.ForeignKey('album.id'), nullable=False)
-    file_path = db.Column(db.String(200), nullable=False)
-    version_type = db.Column(db.String(50), nullable=False)
-    enabled = db.Column(db.Boolean(), default=True, nullable=False)
-    explicit = db.Column(db.Boolean(), nullable=False)
-    played = db.Column(db.Integer, default=0, nullable=False)
-    featuring = db.relationship('User', secondary='track_featuring')
-    credits = db.relationship('Credits', backref='track', lazy=True)
+class Album(Document):
+    title = StringField(max_length=100, required=True)
+    user = ReferenceField(User, reverse_delete_rule=CASCADE, required=True)
+    release_date = DateTimeField(required=True)
+    record_label = StringField(max_length=100)
+    language = StringField(max_length=50, required=True)
+    primary_genre = StringField(max_length=50, required=True)
+    secondary_genre = StringField(max_length=50)
+    cover_image = StringField(max_length=200, required=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    explicit = BooleanField(required=True)
+    enabled = BooleanField(default=True, required=True)
 
-class TrackFeaturing(db.Model):
-    track_id = db.Column(db.Integer, db.ForeignKey('track.id'), primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
-    enabled = db.Column(db.Boolean(), default=True, nullable=False)
+    tracks = ListField(ReferenceField('Track', reverse_delete_rule=CASCADE))
 
-class CreditsCategory(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(64), nullable=False, unique=True)
-    credits = db.relationship('Credits', backref='category_rel', lazy=True)
 
-class Credits(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(256), nullable=False, unique=False)
-    track_id = db.Column(db.Integer, db.ForeignKey('track.id'), nullable=False)
-    category = db.Column(db.Integer, db.ForeignKey('credits_category.id'), nullable=False)
+class Track(Document):
+    title = StringField(max_length=100, required=True)
+    album = ReferenceField(Album, reverse_delete_rule=CASCADE, required=True)
+    file_path = StringField(max_length=200, required=True)
+    version_type = StringField(max_length=50, required=True)
+    enabled = BooleanField(default=True, required=True)
+    explicit = BooleanField(required=True)
+    played = IntField(default=0, required=True)
 
-class Follows(db.Model):
-    follower_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
-    followed_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
+    featuring = ListField(ReferenceField(User))
+    credits = ListField(ReferenceField('Credits'))
 
-    __table_args__ = (
-        CheckConstraint('follower_id != followed_id', name='no_self_follow'),
-    )
+
+class TrackFeaturing(Document):
+    track = ReferenceField(Track, reverse_delete_rule=CASCADE, required=True)
+    user = ReferenceField(User, reverse_delete_rule=CASCADE, required=True)
+    enabled = BooleanField(default=True, required=True)
+
+
+class CreditsCategory(Document):
+    name = StringField(max_length=64, unique=True, required=True)
+    credits = ListField(ReferenceField('Credits'))
+
+
+class Credits(Document):
+    name = StringField(max_length=256, required=True)
+    track = ReferenceField(Track, reverse_delete_rule=CASCADE, required=True)
+    category_rel = ReferenceField(CreditsCategory, reverse_delete_rule=CASCADE, required=True)
+
+
+class Follows(Document):
+    follower = ReferenceField(User, reverse_delete_rule=CASCADE, required=True)
+    followed = ReferenceField(User, reverse_delete_rule=CASCADE, required=True)
+
+    meta = {
+        'indexes': [
+            {'fields': ['follower', 'followed'], 'unique': True}
+        ],
+        # Control de no seguirse a sí mismo en la lógica de la app, MongoEngine no soporta constraints custom
+    }
 
 @login_manager.user_loader
-def load_user(id):
-    return User.query.get(int(id))
+def load_user(user_id):
+    try:
+        return User.objects(id=user_id).first()
+    except:
+        return None
 
 #endregion
 
@@ -112,22 +127,43 @@ def load_user(id):
 def is_admin(user):
     return not isinstance(user, AnonymousUserMixin) and user.is_admin
 
+# Maintainance
+
+
+app = Flask(__name__)
+
+# Rutas permitidas
+allowed_paths = ['/', '/tracks']
+
+@app.before_request
+def restrict_pages():
+    if request.path not in allowed_paths:
+        # Opción 1: devolver 403 Forbidden
+        abort(403)
+        
+        # Opción 2: redirigir al index
+        #return redirect(url_for('index'))
+
 # Uploads managment
 
 @app.route("/tracks/<filename>")
 def getupload(filename: str):
     file_path = os.path.join(app.root_path, 'static', 'uploads', 'tracks')
-    if not os.path.exists(os.path.join(file_path, filename)):
+    full_path = os.path.join(file_path, filename)
+    
+    if not os.path.exists(full_path):
         abort(404)
 
-    track = Track.query.filter_by(file_path="/uploads/tracks/" + filename).first()
-    if not track or (not track.enabled or not track.album.enabled) and not current_user.is_admin:
+    track = Track.objects(file_path=f"/uploads/tracks/{filename}").first()
+    if not track or ((not track.enabled or not track.album.enabled) and not current_user.is_admin):
         abort(404)
+    
     if (not track.enabled or not track.album.enabled) and current_user.is_admin:
         return send_from_directory(file_path, filename)
-
+    
     track.played += 1
-    db.session.commit()
+    track.save()  # guardamos el cambio en MongoDB
+    
     return send_from_directory(file_path, filename)
 
 
@@ -136,28 +172,36 @@ def getupload(filename: str):
 @app.route("/")
 def index():
     # Fetch latest releases
-    latest_releases = Album.query
-    if not is_admin(current_user):
-        latest_releases = latest_releases.filter_by(enabled=True).join(User).filter(User.enabled)
+    if is_admin(current_user):
+        latest_releases = Album.objects.order_by('-created_at').limit(4)
+    else:
+        # Solo álbumes y usuarios habilitados
+        latest_releases = Album.objects(enabled=True).select_related()
+        latest_releases = [a for a in latest_releases if a.user.enabled]
+        latest_releases = sorted(latest_releases, key=lambda a: a.created_at, reverse=True)[:4]
 
-    latest_releases = latest_releases.order_by(Album.created_at.desc()).limit(4).all()
-    latest_releases = [
+    latest_releases_list = [
         (release, release.user, release.enabled and release.user.enabled)
         for release in latest_releases
     ]
 
     # Fetch most played tracks
-    most_played = Track.query.filter(Track.played > 0)
-    if not is_admin(current_user):
-        most_played = most_played.join(Album).join(User).filter(User.enabled).filter_by(enabled=True).filter(Album.enabled)
+    if is_admin(current_user):
+        most_played = Track.objects(play_count__gt=0).select_related().order_by('-played').limit(4)
+    else:
+        tracks = Track.objects(play_count__gt=0).select_related()
+        tracks = [
+            t for t in tracks
+            if t.enabled and t.album.enabled and t.album.user.enabled
+        ]
+        most_played = sorted(tracks, key=lambda t: t.played, reverse=True)[:4]
 
-    most_played = most_played.order_by(Track.played.desc()).limit(4).all()
-    most_played = [
-        (track, track.album.user, track.enabled and track.album.enabled and track.album.user.enabled) 
+    most_played_list = [
+        (track, track.album.user, track.enabled and track.album.enabled and track.album.user.enabled)
         for track in most_played
     ]
 
-    return render_template("index.html", latest_releases=latest_releases, most_played=most_played)
+    return render_template("index.html", latest_releases=latest_releases_list, most_played=most_played_list)
 
 @app.route("/register", methods=["GET", "POST"])
 def register():

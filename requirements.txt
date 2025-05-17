@@ -1,5 +1,6 @@
 Flask
-flask_sqlalchemy
 flask_login
 gunicorn
-dotenv
+python-dotenv
+pymongo[srv]
+mongoengine
