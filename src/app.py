@@ -1,107 +1,96 @@
-from flask import *
-from flask_mongoengine import MongoEngine
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort, send_from_directory
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user, AnonymousUserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
 import time
+import argparse
 from dotenv import load_dotenv
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 
-if not os.environ.get("SECRET_KEY") or os.environ.get("USE_DOTENV") == "true":
+parser = argparse.ArgumentParser()
+parser.add_argument("--debug", "-d", action="store_true")
+args = parser.parse_args()
+
+if not os.environ.get("SECRET_KEY"):
     load_dotenv()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
-
-# MongoDB connection setup
-app.config['MONGODB_SETTINGS'] = {
-    'host': f"mongodb+srv://{os.environ.get('MONGODB_USERNAME')}:{os.environ.get('MONGODB_PASSWORD')}@{os.environ.get('MONGODB_CLUSTER')}/fanmade?retryWrites=true&w=majority"
-}
-
+app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 ** 2
-db = MongoEngine(app)
+
+# MongoDB connection
+mongo_client = MongoClient(os.environ.get("MONGODB_URI", "mongodb://localhost:27017/"))
+db = mongo_client.fanmade
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 #region Models
 
-class User(UserMixin, db.Document):
-    artistName = db.StringField(max_length=80, unique=True, required=True)
-    username = db.StringField(max_length=32, unique=True, required=True)
-    email = db.StringField(max_length=256, unique=True, required=True)
-    password_hash = db.StringField(max_length=128)
-    enabled = db.BooleanField(default=True)
-    is_admin = db.BooleanField(default=False)
+class User(UserMixin):
+    def __init__(self, user_data):
+        self.user_data = user_data
+        
+    @property
+    def id(self):
+        return str(self.user_data.get('_id'))
     
-    meta = {'collection': 'users'}
+    @property
+    def artistName(self):
+        return self.user_data.get('artistName')
+    
+    @property
+    def username(self):
+        return self.user_data.get('username')
+    
+    @property
+    def email(self):
+        return self.user_data.get('email')
+    
+    @property
+    def enabled(self):
+        return self.user_data.get('enabled', True)
+    
+    @property
+    def is_admin(self):
+        return self.user_data.get('is_admin', False)
+    
+    @property
+    def password_hash(self):
+        return self.user_data.get('password_hash')
     
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.user_data['password_hash'] = generate_password_hash(password)
         
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-
-class TrackFeaturing(db.EmbeddedDocument):
-    user = db.ReferenceField(User)
-    enabled = db.BooleanField(default=True)
-
-class Credits(db.EmbeddedDocument):
-    name = db.StringField(max_length=256, required=True)
-    category = db.IntField(required=True)  # Reference to CreditsCategory by ID
-
-class Track(db.Document):
-    title = db.StringField(max_length=100, required=True)
-    album = db.ReferenceField('Album', required=True)
-    file_path = db.StringField(max_length=200, required=True)
-    version_type = db.StringField(max_length=50, required=True)
-    enabled = db.BooleanField(default=True)
-    explicit = db.BooleanField(required=True)
-    played = db.IntField(default=0)
-    featuring = db.ListField(db.ReferenceField(User))
-    credits = db.ListField(db.EmbeddedDocumentField(Credits))
     
-    meta = {'collection': 'tracks'}
-
-class Album(db.Document):
-    title = db.StringField(max_length=100, required=True)
-    user = db.ReferenceField(User, required=True)
-    release_date = db.DateTimeField(required=True)
-    record_label = db.StringField(max_length=100)
-    language = db.StringField(max_length=50, required=True)
-    primary_genre = db.StringField(max_length=50, required=True)
-    secondary_genre = db.StringField(max_length=50)
-    cover_image = db.StringField(max_length=200, required=True)
-    created_at = db.DateTimeField(default=datetime.utcnow)
-    explicit = db.BooleanField(required=True)
-    enabled = db.BooleanField(default=True)
+    def get_albums(self):
+        return db.albums.find({'user_id': self.id, 'enabled': True})
     
-    meta = {'collection': 'albums'}
-
-class CreditsCategory(db.Document):
-    name = db.StringField(max_length=64, required=True, unique=True)
+    def get_followers(self):
+        return db.follows.find({'followed_id': self.id})
     
-    meta = {'collection': 'credits_categories'}
-
-class Follows(db.Document):
-    follower = db.ReferenceField(User, required=True)
-    followed = db.ReferenceField(User, required=True)
+    def get_following(self):
+        return db.follows.find({'follower_id': self.id})
     
-    meta = {
-        'collection': 'follows',
-        'indexes': [
-            {'fields': ['follower', 'followed'], 'unique': True}
-        ]
-    }
-    
-    def clean(self):
-        if self.follower.id == self.followed.id:
-            abort(400)
+    def save(self):
+        if '_id' in self.user_data:
+            db.users.update_one({'_id': self.user_data['_id']}, {'$set': self.user_data})
+        else:
+            result = db.users.insert_one(self.user_data)
+            self.user_data['_id'] = result.inserted_id
+        return self
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.objects(id=user_id).first()
+    user_data = db.users.find_one({'_id': ObjectId(user_id)})
+    if not user_data:
+        return None
+    return User(user_data)
 
 #endregion
 
@@ -109,6 +98,39 @@ def load_user(user_id):
 
 def is_admin(user):
     return not isinstance(user, AnonymousUserMixin) and user.is_admin
+
+def get_album_by_id(album_id):
+    try:
+        return db.albums.find_one({'_id': ObjectId(album_id)})
+    except:
+        return None
+
+def get_track_by_id(track_id):
+    try:
+        return db.tracks.find_one({'_id': ObjectId(track_id)})
+    except:
+        return None
+
+def get_user_by_id(user_id):
+    try:
+        user_data = db.users.find_one({'_id': ObjectId(user_id)})
+        if user_data:
+            return User(user_data)
+        return None
+    except:
+        return None
+
+def get_user_by_username(username):
+    user_data = db.users.find_one({'username': username.lower()})
+    if user_data:
+        return User(user_data)
+    return None
+
+def get_user_by_artist_name(artist_name):
+    user_data = db.users.find_one({'artistName': artist_name})
+    if user_data:
+        return User(user_data)
+    return None
 
 # Uploads management
 
@@ -118,14 +140,26 @@ def getupload(filename: str):
     if not os.path.exists(os.path.join(file_path, filename)):
         abort(404)
 
-    track = Track.objects(file_path="/uploads/tracks/" + filename).first()
-    if not track or (not track.enabled or not track.album.enabled) and not current_user.is_admin:
+    track = db.tracks.find_one({'file_path': "/uploads/tracks/" + filename})
+    if not track:
         abort(404)
-    if (not track.enabled or not track.album.enabled) and current_user.is_admin:
+        
+    album = get_album_by_id(track['album_id'])
+    if not album:
+        abort(404)
+        
+    user = get_user_by_id(album['user_id'])
+    if not user:
+        abort(404)
+        
+    if (not track.get('enabled', True) or not album.get('enabled', True)) and not current_user.is_admin:
+        abort(404)
+        
+    if (not track.get('enabled', True) or not album.get('enabled', True)) and current_user.is_admin:
         return send_from_directory(file_path, filename)
 
-    track.played += 1
-    track.save()
+    # Update play count
+    db.tracks.update_one({'_id': track['_id']}, {'$inc': {'played': 1}})
     return send_from_directory(file_path, filename)
 
 
@@ -135,25 +169,41 @@ def getupload(filename: str):
 def index():
     # Fetch latest releases
     if not is_admin(current_user):
-        latest_releases = Album.objects(enabled=True, user__enabled=True).order_by('-created_at').limit(4)
+        latest_releases_query = {'enabled': True}
     else:
-        latest_releases = Album.objects.order_by('-created_at').limit(4)
-
-    latest_releases = [
-        (release, release.user, release.enabled and release.user.enabled)
-        for release in latest_releases
-    ]
+        latest_releases_query = {}
+        
+    latest_releases_data = list(db.albums.find(latest_releases_query).sort('created_at', -1).limit(4))
+    
+    latest_releases = []
+    for release in latest_releases_data:
+        user = get_user_by_id(release['user_id'])
+        if user and (user.enabled or is_admin(current_user)):
+            latest_releases.append((
+                release,
+                user,
+                release.get('enabled', True) and user.enabled
+            ))
 
     # Fetch most played tracks
     if not is_admin(current_user):
-        most_played = Track.objects(played__gt=0, enabled=True, album__enabled=True, album__user__enabled=True).order_by('-played').limit(4)
+        most_played_query = {'played': {'$gt': 0}, 'enabled': True}
     else:
-        most_played = Track.objects(played__gt=0).order_by('-played').limit(4)
-
-    most_played = [
-        (track, track.album.user, track.enabled and track.album.enabled and track.album.user.enabled) 
-        for track in most_played
-    ]
+        most_played_query = {'played': {'$gt': 0}}
+        
+    most_played_data = list(db.tracks.find(most_played_query).sort('played', -1).limit(4))
+    
+    most_played = []
+    for track in most_played_data:
+        album = get_album_by_id(track['album_id'])
+        if album:
+            user = get_user_by_id(album['user_id'])
+            if user and (user.enabled or is_admin(current_user)):
+                most_played.append((
+                    track,
+                    user,
+                    track.get('enabled', True) and album.get('enabled', True) and user.enabled
+                ))
 
     return render_template("index.html", latest_releases=latest_releases, most_played=most_played)
 
@@ -181,12 +231,21 @@ def register():
        or not (6 <= len(password)):
         abort(400)
     
-    if User.objects(artistName=artistName).first() \
-       or User.objects(username=username).first() \
-       or User.objects(email=email).first():
+    # Check if user already exists
+    if db.users.find_one({'artistName': artistName}) \
+       or db.users.find_one({'username': username}) \
+       or db.users.find_one({'email': email}):
         abort(409)
 
-    new_user = User(artistName=artistName, username=username, email=email)
+    # Create new user
+    user_data = {
+        'artistName': artistName,
+        'username': username,
+        'email': email,
+        'enabled': True,
+        'is_admin': False
+    }
+    new_user = User(user_data)
     new_user.set_password(password)
     new_user.save()
 
@@ -206,7 +265,8 @@ def login():
 
     username = request.form["username"].lower()
     password = request.form["password"]
-    user = User.objects(username=username).first()
+    user = get_user_by_username(username)
+    
     if user and user.check_password(password) and user.enabled:
         login_user(user)
         return redirect(url_for('index'))
@@ -223,19 +283,27 @@ def logout():
 
 @app.route("/album/<album_id>", methods=["GET", "POST"])
 def album(album_id: str):
-    album_data = Album.objects(id=album_id).first()
+    album_data = get_album_by_id(album_id)
+    if not album_data:
+        abort(404)
+        
     if request.method == "GET":
-        if album_data and (album_data.enabled or current_user.is_admin):
-            user_data = album_data.user
-            return render_template("album.html", title=album_data.title, album_data=album_data, user_data=user_data)
+        if album_data and (album_data.get('enabled', True) or current_user.is_admin):
+            user_data = get_user_by_id(album_data['user_id'])
+            if not user_data:
+                abort(404)
+            return render_template("album.html", title=album_data['title'], album_data=album_data, user_data=user_data)
         else:
             abort(404)
 
     if not current_user.is_admin:
         abort(405)
 
-    album_data.enabled = not album_data.enabled
-    album_data.save()
+    # Toggle album enabled status
+    db.albums.update_one(
+        {'_id': ObjectId(album_id)},
+        {'$set': {'enabled': not album_data.get('enabled', True)}}
+    )
     return redirect(url_for('album', _method="GET", album_id=album_id))
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -251,50 +319,54 @@ def upload():
 
     user = current_user
 
-    if not user:
-        abort(401)
+    # Create album
+    album = {
+        'title': request.form["album_title"],
+        'user_id': user.id,
+        'release_date': datetime.strptime(request.form['release_date'], '%Y-%m-%d'),
+        'record_label': request.form.get('record_label'),
+        'language': request.form['language'],
+        'primary_genre': request.form['primary_genre'],
+        'secondary_genre': request.form.get('secondary_genre'),
+        'created_at': datetime.utcnow(),
+        'enabled': True
+    }
 
-    album = Album(
-        title=request.form["album_title"],
-        user=user,
-        release_date=datetime.strptime(request.form['release_date'], '%Y-%m-%d'),
-        record_label=request.form.get('record_label'),
-        language=request.form['language'],
-        primary_genre=request.form['primary_genre'],
-        secondary_genre=request.form.get('secondary_genre')
-    )
-
+    # Handle cover image
     cover_image = request.files['cover_image']
     if cover_image:
-        filename = secure_filename(f"{user.artistName}_{album.title}_{time.time_ns()}_cover.jpg")
+        filename = secure_filename(f"{user.artistName}_{album['title']}_{time.time_ns()}_cover.jpg")
         cover_image.save(os.path.join(app.config['UPLOAD_FOLDER'], 'covers', filename))
-        album.cover_image = "/uploads/covers/" + filename
+        album['cover_image'] = "/uploads/covers/" + filename
 
-    # Check if any track is explicit to mark the album
-    album.explicit = False
+    # Check if any track is explicit
     for i in range(track_count):
         try:
             request.form[f"is_explicit_{i}"]
-            album.explicit = True
+            album['explicit'] = True
             break
         except:
-            continue
+            pass
+    else:
+        album['explicit'] = False
 
-    album.save()
+    # Insert album to database
+    album_id = db.albums.insert_one(album).inserted_id
 
+    # Process tracks
     for i in range(track_count):
         confirmed_featurings = []
         if request.form.get(f'has_featuring_{i}'):
             featurings = request.form.getlist(f'featuring_{i}[]')
 
             for featuring in featurings:
-                featuring_user = User.objects(artistName=featuring).first()
-                if featuring_user.id == user.id:
+                featuring_user = get_user_by_artist_name(featuring)
+                if featuring_user and featuring_user.id == user.id:
                     flash(f"You tried to add yourself as a featuring, we skipped it.")
                 elif featuring_user and featuring_user.enabled:
-                    confirmed_featurings.append(featuring_user)
+                    confirmed_featurings.append(featuring_user.id)
                 else:
-                    flash(f"User with artist name '{featuring}' doesn't exist. Ask them to create a account in Fanmade.")
+                    flash(f"User with artist name '{featuring}' doesn't exist. Ask them to create an account in Fanmade.")
                     return redirect(url_for('upload'))
 
         is_explicit = False
@@ -304,23 +376,26 @@ def upload():
         except:
             pass
 
-        track = Track(
-            title=request.form[f'track_title_{i}'],
-            album=album,
-            version_type=request.form[f'version_type_{i}'],
-            explicit=is_explicit
-        )
+        track = {
+            'title': request.form[f'track_title_{i}'],
+            'album_id': str(album_id),
+            'version_type': request.form[f'version_type_{i}'],
+            'explicit': is_explicit,
+            'enabled': True,
+            'played': 0,
+            'featuring': confirmed_featurings
+        }
         
         # Handle track file upload
         track_file = request.files[f'track_file_{i}']
         if track_file:
-            filename = secure_filename(f"{user.artistName}_{album.title}_{track.title}_{time.time_ns()}.mp3")
+            filename = secure_filename(f"{user.artistName}_{album['title']}_{track['title']}_{time.time_ns()}.mp3")
             track_file.save(os.path.join(app.config['UPLOAD_FOLDER'], 'tracks', filename))
-            track.file_path = "/uploads/tracks/" + filename
+            track['file_path'] = "/uploads/tracks/" + filename
         
-        # Add featuring users
-        track.featuring = confirmed_featurings
-        
+        # Insert track to database
+        track_id = db.tracks.insert_one(track).inserted_id
+
         # Process credits
         written_by = request.form.getlist(f"written_by_{i}[]")
         produced_by = request.form.getlist(f"produced_by_{i}[]")
@@ -330,18 +405,30 @@ def upload():
             written_by = [current_user.artistName]
             flash("You are required to insert a writer on the writer list. As it wasn't added, your artist name will be added.")
 
-        track_credits = []
+        credits = []
         for writer in written_by:
-            track_credits.append(Credits(name=writer, category=2))
+            credits.append({
+                'track_id': str(track_id),
+                'category': 2,  # Writer
+                'name': writer
+            })
 
         for producer in produced_by:
-            track_credits.append(Credits(name=producer, category=3))
+            credits.append({
+                'track_id': str(track_id),
+                'category': 3,  # Producer
+                'name': producer
+            })
 
         for metadata in metadata_by:
-            track_credits.append(Credits(name=metadata, category=4))
-            
-        track.credits = track_credits
-        track.save()
+            credits.append({
+                'track_id': str(track_id),
+                'category': 4,  # Metadata
+                'name': metadata
+            })
+
+        if credits:
+            db.credits.insert_many(credits)
 
     flash('Album uploaded successfully!')
     return redirect(url_for('index'))
@@ -359,38 +446,53 @@ def artist(username: str):
         abort(400)
     else:
         username = username.replace("@", "").lower()
-        user_data = User.objects(username=username).first()
+        user_data = get_user_by_username(username)
 
     if not user_data or not user_data.enabled:
         abort(404)
     
-    latest_releases = Album.objects(user=user_data, enabled=True).order_by('-created_at').limit(4)
+    # Get latest releases
+    latest_releases = list(db.albums.find({'user_id': user_data.id, 'enabled': True}).sort('created_at', -1).limit(4))
     
-    # Finding all albums where this user is featured
-    featured_tracks = Track.objects(featuring=user_data)
-    featured_album_ids = [track.album.id for track in featured_tracks]
-    featurings = Album.objects(id__in=featured_album_ids).order_by('-created_at').limit(4)
+    # Get featuring albums
+    # This is a bit tricky without SQL joins, so we'll handle it differently
+    featuring_tracks = list(db.tracks.find({'featuring': user_data.id}))
+    featuring_album_ids = [track['album_id'] for track in featuring_tracks]
+    featurings = []
+    if featuring_album_ids:
+        featurings = list(db.albums.find({'_id': {'$in': [ObjectId(aid) for aid in featuring_album_ids]}, 'enabled': True}).sort('created_at', -1).limit(4))
     
-    most_played = Track.objects(enabled=True, album__enabled=True, album__user=user_data).order_by('-played').first()
-    follows = not (isinstance(current_user, AnonymousUserMixin) or not bool(Follows.objects(follower=current_user.id, followed=user_data.id).first()))
+    # Get most played track
+    most_played = db.tracks.find_one(
+        {'enabled': True, 'album_id': {'$in': [str(album['_id']) for album in latest_releases]}},
+        sort=[('played', -1)]
+    )
+    
+    # Check if current user follows the artist
+    follows = False
+    if not isinstance(current_user, AnonymousUserMixin):
+        follows = bool(db.follows.find_one({'follower_id': current_user.id, 'followed_id': user_data.id}))
 
-    return render_template("artist.html", follows=follows, current_data=current_user, title=user_data.artistName, latest_releases=latest_releases, featurings=featurings, user_data=user_data, most_played=most_played)
+    return render_template("artist.html", follows=follows, current_data=current_user, title=user_data.artistName, 
+                          latest_releases=latest_releases, featurings=featurings, user_data=user_data, most_played=most_played)
 
 @app.route("/follow/<user_id>", methods=["POST"])
 def follow(user_id: str):
-    if isinstance(current_user, AnonymousUserMixin) or str(user_id) == str(current_user.id):
+    if isinstance(current_user, AnonymousUserMixin) or user_id == current_user.id:
         abort(401)
 
-    user = User.objects(id=user_id).first()
+    user = get_user_by_id(user_id)
     if not user:
         flash(f"User with id {user_id} doesn't exist.")
         return redirect(url_for('index'))
 
-    if Follows.objects(follower=current_user.id, followed=user.id).first():
+    if db.follows.find_one({'follower_id': current_user.id, 'followed_id': user_id}):
         flash(f"You already follow {user.artistName}.")
     else:
-        follow = Follows(follower=current_user.id, followed=user.id)
-        follow.save()
+        db.follows.insert_one({
+            'follower_id': current_user.id,
+            'followed_id': user_id
+        })
 
     return redirect(url_for('artist', username="@" + user.username))
 
@@ -399,16 +501,15 @@ def unfollow(user_id: str):
     if isinstance(current_user, AnonymousUserMixin):
         abort(401)
         
-    user = User.objects(id=user_id).first()
+    user = get_user_by_id(user_id)
     if not user:
         flash(f"User with id {user_id} doesn't exist.")
         return redirect(url_for('index'))
 
-    existing_follow = Follows.objects(follower=current_user.id, followed=user.id).first()
-    if not existing_follow:
+    if not db.follows.find_one({'follower_id': current_user.id, 'followed_id': user_id}):
         flash(f"You don't follow {user.artistName}.")
     else:
-        existing_follow.delete()
+        db.follows.delete_one({'follower_id': current_user.id, 'followed_id': user_id})
 
     return redirect(url_for('artist', username="@" + user.username))
 
@@ -419,14 +520,40 @@ def search():
     
     if query:
         try:
-            # MongoEngine allows complex queries
-            results = Album.objects(
-                db.Q(title__icontains=query) | 
-                db.Q(user__artistName__icontains=query) | 
-                db.Q(user__username__icontains=query)
-            )
+            # Search for albums by title
+            title_results = list(db.albums.find({'title': {'$regex': query, '$options': 'i'}}))
+            
+            # Search for artists by name or username
+            artist_ids = []
+            artists = list(db.users.find({
+                '$or': [
+                    {'artistName': {'$regex': query, '$options': 'i'}},
+                    {'username': {'$regex': query, '$options': 'i'}}
+                ]
+            }))
+            
+            for artist in artists:
+                artist_ids.append(str(artist['_id']))
+                
+            # Get albums by these artists
+            artist_albums = list(db.albums.find({'user_id': {'$in': artist_ids}}))
+            
+            # Combine results
+            results = title_results + artist_albums
+            
+            # Remove duplicates
+            seen_ids = set()
+            unique_results = []
+            for album in results:
+                if str(album['_id']) not in seen_ids:
+                    seen_ids.add(str(album['_id']))
+                    unique_results.append(album)
+                    
+            results = unique_results
+            
         except Exception as e:
-            print(f"Error during search: {e}")
+            # You can log the error if needed
+            print(f"Error performing search: {e}")
     else:
         return redirect(url_for('index'))
     
@@ -435,66 +562,89 @@ def search():
 # API
 @app.route("/api/v1/play/<track_id>")
 def play(track_id: str):
-    track = Track.objects(id=track_id).first()
-    if not track or not track.enabled:
+    track = get_track_by_id(track_id)
+    if not track or not track.get('enabled', True):
         abort(404)
     
-    album = track.album
-    user = album.user
+    album = get_album_by_id(track['album_id'])
+    if not album:
+        abort(404)
+        
+    user_data = get_user_by_id(album['user_id'])
+    if not user_data:
+        abort(404)
+        
     response = {
-        "track_title": track.title,
-        "track_url": "/tracks/" + track.file_path.replace("/uploads/tracks/", ""),
-        "album_title": album.title,
-        "artist_name": user.artistName,
-        "cover_image": url_for('static', filename=album.cover_image),
-        "album_id": str(album.id)
+        "track_title": track['title'],
+        "track_url": "/tracks/" + track['file_path'].replace("/uploads/tracks/", ""),
+        "album_title": album['title'],
+        "artist_name": user_data.artistName,
+        "cover_image": url_for('static', filename=album['cover_image']),
+        "album_id": str(album['_id'])
     }
     return jsonify(response)
 
 @app.route("/api/v1/credits/<track_id>")
 def track_credits(track_id: str):
-    track_data = Track.objects(enabled=True, id=track_id).first()
-    if not track_data:
+    track_data = get_track_by_id(track_id)
+    if not track_data or not track_data.get('enabled', True):
+        abort(404)
+
+    album = get_album_by_id(track_data['album_id'])
+    if not album:
+        abort(404)
+        
+    user_data = get_user_by_id(album['user_id'])
+    if not user_data:
         abort(404)
 
     credits = []
 
-    # Get performers category name
-    performers_category = CreditsCategory.objects(id=1).first()
-    if performers_category:
-        category_name = performers_category.name
-        artists = [track_data.album.user.artistName]
-        artists.extend([artist.artistName for artist in track_data.featuring])
+    # Get performers (main artist + featuring artists)
+    performers_category = db.credits_categories.find_one({'id': 1})
+    category_name = performers_category['name'] if performers_category else "Performed by"
+    
+    artists = [user_data.artistName]
+    for featuring_id in track_data.get('featuring', []):
+        featuring_user = get_user_by_id(featuring_id)
+        if featuring_user:
+            artists.append(featuring_user.artistName)
 
-        credits.append({
-            "name": category_name,
-            "artists": artists
-        })
+    credits.append({
+        "name": category_name,
+        "artists": artists
+    })
 
-    # Process other credits from track credits list
-    for credit in track_data.credits:
-        category = CreditsCategory.objects(id=credit.category).first()
-        if not category:
-            continue
-            
-        existing_credit = next((item for item in credits if item["name"] == category.name), None)
+    # Get other credits
+    track_credits = list(db.credits.find({'track_id': track_id}))
+    categories = list(db.credits_categories.find())
+    
+    categories_dict = {cat['id']: cat['name'] for cat in categories}
+    
+    for credit in track_credits:
+        category_name = categories_dict.get(credit['category'], f"Category {credit['category']}")
+        existing_credit = next((item for item in credits if item["name"] == category_name), None)
         if existing_credit:
-            existing_credit["artists"].append(credit.name)
+            existing_credit["artists"].append(credit['name'])
         else:
             credits.append({
-                "name": category.name,
-                "artists": [credit.name]
+                "name": category_name,
+                "artists": [credit['name']]
             })
 
     return jsonify(credits)
 
 @app.route("/api/v1/album/<album_id>")
 def album_api(album_id: str):
-    album = Album.objects(id=album_id).first_or_404()
-    tracks = Track.objects(album=album)
+    album = get_album_by_id(album_id)
+    if not album:
+        abort(404)
+        
+    tracks = list(db.tracks.find({'album_id': str(album['_id'])}))
+    
     return jsonify({
-        'title': album.title,
-        'tracks': [str(track.id) for track in tracks]
+        'title': album['title'],
+        'tracks': [str(track['_id']) for track in tracks]
     })
 
 # Health check
@@ -502,15 +652,31 @@ def album_api(album_id: str):
 def health():
     return jsonify({"status": "ok"})
 
+# Initialize database
+def init_db():
+    # Create credit categories if they don't exist
+    categories = [
+        {"id": 1, "name": "Performed by"},
+        {"id": 2, "name": "Written by"},
+        {"id": 3, "name": "Produced by"},
+        {"id": 4, "name": "Metadata by"}
+    ]
+    
+    for category in categories:
+        if not db.credits_categories.find_one({"id": category["id"]}):
+            db.credits_categories.insert_one(category)
+            
+    # Create indexes for better performance
+    db.users.create_index("username", unique=True)
+    db.users.create_index("artistName", unique=True)
+    db.users.create_index("email", unique=True)
+    db.albums.create_index("user_id")
+    db.albums.create_index("created_at")
+    db.tracks.create_index("album_id")
+    db.tracks.create_index("played")
+    db.credits.create_index("track_id")
+    db.follows.create_index([("follower_id", 1), ("followed_id", 1)], unique=True)
+
 if __name__ == "__main__":
-    # Initialize categories if they don't exist
-    if not CreditsCategory.objects(id=1).first():
-        CreditsCategory(id=1, name="Performers").save()
-    if not CreditsCategory.objects(id=2).first():
-        CreditsCategory(id=2, name="Written By").save()
-    if not CreditsCategory.objects(id=3).first():
-        CreditsCategory(id=3, name="Produced By").save()
-    if not CreditsCategory.objects(id=4).first():
-        CreditsCategory(id=4, name="Metadata By").save()
-        
-    app.run(debug=False, port=80)
+    init_db()
+    app.run(debug=args.debug, port=80)
