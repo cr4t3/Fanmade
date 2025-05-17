@@ -499,6 +499,11 @@ def album_api(album_id: int):
         'tracks': [track.id for track in album.tracks]
     })
 
+# Health check
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
