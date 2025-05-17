@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 #args = parser.parse_args()
 
-if not os.environ["SECRET_KEY"] or os.environ["USE_DOTENV"]:
+if not os.environ["SECRET_KEY"] or os.environ["USE_DOTENV"] == "true":
     load_dotenv()
 
 app = Flask(__name__)
@@ -142,7 +142,7 @@ def restrict_pages():
         abort(403)
         
         # Opción 2: redirigir al index
-        #return redirect(url_for('index'))
+        return redirect(url_for('index'))
 
 # Uploads managment
 
