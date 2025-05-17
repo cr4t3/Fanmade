@@ -24,7 +24,7 @@ app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 ** 2
 
 # MongoDB connection
 mongo_client = MongoClient(f"mongodb+srv://{os.environ.get('MONGODB_USERNAME')}:{os.environ.get('MONGODB_PASSWORD')}@{os.environ.get('MONGODB_CLUSTER')}/?retryWrites=true&w=majority&appName=Cluster0")
-db = mongo_client.fanmade
+db = mongo_client.fanmade_db
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
