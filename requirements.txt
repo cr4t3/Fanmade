@@ -3,5 +3,5 @@ flask_login
 gunicorn
 python-dotenv
 pymongo[srv]
-git+https://github.com/idoshr/flask-mongoengine.git@1.0.1
+git+https://github.com/idoshr/flask-mongoengine.git
 dnspython
