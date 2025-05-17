@@ -5,14 +5,14 @@ from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
 import time
-import argparse
+#import argparse
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--debug", "-d", action="store_true")
-args = parser.parse_args()
+#parser = argparse.ArgumentParser()
+#parser.add_argument("--debug", "-d", action="store_true")
+#args = parser.parse_args()
 
 if not os.environ.get("SECRET_KEY"):
     load_dotenv()
@@ -679,4 +679,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=args.debug, port=80)
+    app.run(debug=False, port=80)
