@@ -7,14 +7,14 @@ from sqlalchemy import CheckConstraint
 import os
 from datetime import datetime
 import time
-import argparse
+#import argparse
 from dotenv import load_dotenv
 
-parser = argparse.ArgumentParser()
+#parser = argparse.ArgumentParser()
 
-parser.add_argument("--debug", "-d", action="store_true")
+#parser.add_argument("--debug", "-d", action="store_true")
 
-args = parser.parse_args()
+#args = parser.parse_args()
 
 if not os.environ["SECRET_KEY"]:
     load_dotenv()
@@ -507,4 +507,4 @@ def health():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run(debug = args.debug, port = 80)
+    app.run(debug = False, port = 80)
