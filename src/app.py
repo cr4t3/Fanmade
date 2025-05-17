@@ -23,7 +23,7 @@ app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 ** 2
 
 # MongoDB connection
-mongo_client = MongoClient(f"mongodb+srv://{os.environ.get('MONGODB_USERNAME')}:{os.environ.get('MONGODB_PASSWORD')}@{os.environ.get('MONGODB_CLUSTER')}")
+mongo_client = MongoClient(f"mongodb+srv://{os.environ.get('MONGODB_USERNAME')}:{os.environ.get('MONGODB_PASSWORD')}@{os.environ.get('MONGODB_CLUSTER')}/?retryWrites=true&w=majority&appName=Cluster0")
 db = mongo_client.fanmade
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
